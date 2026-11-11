@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: jimnaya-trusted-global-agency
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: jimnaya-enquiries
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /app/data
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: BUSINESS_PHONE
+        sync: false
+      - key: BUSINESS_EMAIL
+        sync: false
+      - key: WHATSAPP_NUMBER
+        sync: false
+      - key: BUSINESS_ADDRESS
+        sync: false
+      - key: BUSINESS_HOURS
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: NOTIFICATION_EMAIL
+        sync: false
+      - key: PUBLIC_SITE_URL
+        sync: false
+      - key: FROM_EMAIL
+        sync: false

@@ -1,0 +1,8 @@
+{
+  "name": "jimnaya-trusted-global-agency",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Jimnaya Trusted Global Agency — luxury travel website and enquiry management",
+  "scripts": { "start": "node server.js", "setup": "node setup.js", "check": "node --check server.js && node --check script.js && node --check admin.js && node --check setup.js" },
+  "engines": { "node": ">=22.0.0" }
+}
