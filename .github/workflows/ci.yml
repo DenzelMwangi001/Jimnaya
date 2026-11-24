@@ -1,0 +1,68 @@
+name: Jimnaya checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [jimnaya-upgrades]
+
+jobs:
+  syntax-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Smoke-test server routes and new APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NODE_ENV=development
+          export PORT=3187
+          export ADMIN_PASSWORD='test-only-password-123'
+          export SESSION_SECRET='test-only-session-secret-which-is-long-enough'
+          export DATA_DIR="$RUNNER_TEMP/jimnaya-test-data"
+          node server.js > "$RUNNER_TEMP/jimnaya-server.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in {1..30}; do
+            if curl --silent --fail http://127.0.0.1:3187/health >/dev/null; then break; fi
+            sleep 1
+          done
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const base = 'http://127.0.0.1:3187';
+          const get = async (path) => fetch(base + path);
+          assert.equal((await get('/health')).status, 200);
+          assert.equal((await get('/')).status, 200);
+          assert.equal((await get('/admin')).status, 200);
+          assert.equal((await get('/api/public-config')).status, 200);
+          assert.equal((await get('/api/reviews')).status, 200);
+
+          const invalidEnquiry = await fetch(base + '/api/enquiries', {
+            method: 'POST', headers: {'content-type':'application/json'},
+            body: JSON.stringify({name:'Test',email:'test@example.com',service:'Flight bookings',message:'Test enquiry message',tripType:'return',departureDate:'2030-01-10',returnDate:'2030-01-09'})
+          });
+          assert.equal(invalidEnquiry.status, 400, 'Return date before departure must be rejected');
+
+          const startChat = await fetch(base + '/api/chat/start', {
+            method: 'POST', headers: {'content-type':'application/json'},
+            body: JSON.stringify({name:'Test Visitor',message:'Testing the chat feature'})
+          });
+          assert.equal(startChat.status, 201);
+          const chat = await startChat.json();
+          const chatRead = await fetch(base + '/api/chat/' + encodeURIComponent(chat.id) + '?token=' + encodeURIComponent(chat.token));
+          assert.equal(chatRead.status, 200);
+
+          const review = await fetch(base + '/api/reviews', {
+            method: 'POST', headers: {'content-type':'application/json'},
+            body: JSON.stringify({name:'Test Reviewer',rating:5,text:'This is a test review submission.',consent:'yes'})
+          });
+          assert.equal(review.status, 201);
+          const publicReviews = await (await get('/api/reviews')).json();
+          assert.equal(publicReviews.reviews.length, 0, 'Unapproved reviews must stay private');
+          console.log('Smoke tests passed.');
+          NODE

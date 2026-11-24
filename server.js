@@ -13,6 +13,8 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(ROOT, 'data'));
 const DATA_FILE = path.join(DATA_DIR, 'enquiries.json');
+const CHAT_FILE = path.join(DATA_DIR, 'chats.json');
+const REVIEW_FILE = path.join(DATA_DIR, 'reviews.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString('hex');
 const BUSINESS = {
@@ -36,6 +38,8 @@ if (IS_PROD && (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 16 || !SESSION_SECRET
 }
 fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '[]\n', { mode: 0o600 });
+if (!fs.existsSync(CHAT_FILE)) fs.writeFileSync(CHAT_FILE, '[]\n', { mode: 0o600 });
+if (!fs.existsSync(REVIEW_FILE)) fs.writeFileSync(REVIEW_FILE, '[]\n', { mode: 0o600 });
 
 function loadEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -65,6 +69,13 @@ function readBody(req, limit = 16000) {
 function clean(value, max = 1000) { return String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, max); }
 function validEmail(value) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value) && value.length <= 254; }
 function getRecords() { const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); return Array.isArray(parsed) ? parsed : []; }
+function readStore(file) { const parsed = JSON.parse(fs.readFileSync(file, 'utf8')); return Array.isArray(parsed) ? parsed : []; }
+async function writeStore(file, records) {
+  const temp = `${file}.${process.pid}.${crypto.randomBytes(5).toString('hex')}.tmp`;
+  await fs.promises.writeFile(temp, JSON.stringify(records, null, 2) + '\n', { mode: 0o600 });
+  await fs.promises.rename(temp, file);
+}
+function tokenHash(token) { return crypto.createHash('sha256').update(String(token)).digest('hex'); }
 function appendRecord(record) {
   writeQueue = writeQueue.catch(() => {}).then(async () => {
     const records = getRecords(); records.push(record);
@@ -139,7 +150,7 @@ async function sendNotification(enquiry) {
     `New travel enquiry received (${enquiry.id})`, '',
     `Name: ${enquiry.name}`, `Email: ${enquiry.email}`, `Phone: ${enquiry.phone || 'Not provided'}`,
     `Service: ${enquiry.service}`, `Destination: ${enquiry.destination || 'Not specified'}`,
-    `Travel date: ${enquiry.travelDate || 'Not specified'}`, '', `Message:`, enquiry.message,
+    `Departure date: ${enquiry.departureDate || 'Not specified'}`, `Return date: ${enquiry.returnDate || (enquiry.tripType === 'one-way' ? 'One-way trip' : 'Not specified')}`, '', `Message:`, enquiry.message,
     '', `Received: ${enquiry.receivedAt}`
   ];
   const response = await fetch('https://api.resend.com/emails', {
@@ -176,6 +187,37 @@ const server = http.createServer(async (req, res) => {
     return text(res, 200, xml, 'application/xml; charset=utf-8', { 'Cache-Control':'public, max-age=3600' });
   }
   if (req.method === 'GET' && url.pathname === '/api/public-config') return json(res, 200, publicConfig(), { 'Cache-Control':'public, max-age=300' });
+  if (req.method === 'GET' && url.pathname === '/api/reviews') {
+    const reviews = readStore(REVIEW_FILE).filter(item => item.approved).sort((a,b) => b.receivedAt.localeCompare(a.receivedAt));
+    return json(res, 200, { reviews: reviews.slice(0, 12) }, { 'Cache-Control':'public, max-age=60' });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/reviews') {
+    const limit = rateLimit(`review:${ip}`, 3, 60 * 60 * 1000);
+    if (!limit.allowed) return json(res, 429, { error: 'Please wait before submitting another review.' });
+    try { const body = await readBody(req, 5000); const review = { id: crypto.randomUUID(), name: clean(body.name, 80), rating: Number(body.rating), text: clean(body.text, 700), receivedAt: new Date().toISOString(), approved: false };
+      if (body.consent !== 'yes' || !review.name || !Number.isInteger(review.rating) || review.rating < 1 || review.rating > 5 || review.text.length < 15) return json(res, 400, { error: 'Please provide your name, a rating and a review of at least 15 characters.' });
+      const rows = readStore(REVIEW_FILE); rows.push(review); await writeStore(REVIEW_FILE, rows); return json(res, 201, { ok: true, message: 'Thank you. Your review has been sent for approval.' });
+    } catch { return json(res, 400, { error: 'We could not submit your review. Please try again.' }); }
+  }
+  if (req.method === 'POST' && url.pathname === '/api/chat/start') {
+    const limit = rateLimit(`chat-start:${ip}`, 5, 15 * 60 * 1000); if (!limit.allowed) return json(res, 429, { error: 'Please wait a little before starting another chat.' });
+    try { const body = await readBody(req, 5000); const name = clean(body.name, 80); const message = clean(body.message, 1000); if (!name || message.length < 2) return json(res, 400, { error: 'Please enter your name and a message.' });
+      const id = crypto.randomUUID(); const token = crypto.randomBytes(32).toString('hex'); const now = new Date().toISOString(); const chats = readStore(CHAT_FILE);
+      chats.push({ id, tokenHash: tokenHash(token), name, email: clean(body.email, 254), createdAt: now, updatedAt: now, status: 'open', messages: [{ id: crypto.randomUUID(), sender: 'visitor', text: message, at: now }] });
+      await writeStore(CHAT_FILE, chats); return json(res, 201, { id, token, messages: [{ sender: 'visitor', text: message, at: now }] });
+    } catch { return json(res, 400, { error: 'We could not start the chat. Please try again.' }); }
+  }
+  if (url.pathname.startsWith('/api/chat/')) {
+    const id = clean(url.pathname.split('/').pop(), 80); const token = clean(url.searchParams.get('token'), 100); const limit = rateLimit(`chat:${ip}`, 40, 5 * 60 * 1000);
+    if (!limit.allowed) return json(res, 429, { error: 'Please slow down and try again.' });
+    const chats = readStore(CHAT_FILE); const chat = chats.find(item => item.id === id);
+    if (!chat || !token || !safeEqual(chat.tokenHash, tokenHash(token))) return json(res, 404, { error: 'Chat not found.' });
+    if (req.method === 'GET') return json(res, 200, { messages: chat.messages, status: chat.status });
+    if (req.method === 'POST') { try { const body = await readBody(req, 3000); const message = clean(body.message, 1000); if (!message) return json(res, 400, { error: 'Please enter a message.' });
+      chat.messages.push({ id: crypto.randomUUID(), sender: 'visitor', text: message, at: new Date().toISOString() }); chat.updatedAt = new Date().toISOString(); chat.status = 'open'; await writeStore(CHAT_FILE, chats); return json(res, 201, { ok: true });
+    } catch { return json(res, 400, { error: 'Message could not be sent.' }); } }
+    return json(res, 405, { error: 'Method not allowed.' });
+  }
 
   if (req.method === 'POST' && url.pathname === '/api/enquiries') {
     const limit = rateLimit(`enquiry:${ip}`, 5, 15 * 60 * 1000);
@@ -187,12 +229,13 @@ const server = http.createServer(async (req, res) => {
         id: crypto.randomUUID(), receivedAt: new Date().toISOString(),
         name: clean(body.name, 100), email: clean(body.email, 254).toLowerCase(),
         phone: clean(body.phone, 40), service: clean(body.service, 80),
-        destination: clean(body.destination, 160), travelDate: clean(body.travelDate, 20),
+        destination: clean(body.destination, 160), tripType: clean(body.tripType, 20), departureDate: clean(body.departureDate || body.travelDate, 20), returnDate: clean(body.returnDate, 20), travelDate: clean(body.departureDate || body.travelDate, 20),
         travellers: clean(body.travellers, 30), budget: clean(body.budget, 60),
         message: clean(body.message, 3000), status: 'new', adminNotes: ''
       };
       if (!enquiry.name || !validEmail(enquiry.email) || !ALLOWED_SERVICES.has(enquiry.service) || !enquiry.message || enquiry.message.length < 10) return json(res, 400, { error: 'Please provide your name, a valid email, a service and a message of at least 10 characters.' });
-      if (enquiry.travelDate && (!/^\d{4}-\d{2}-\d{2}$/.test(enquiry.travelDate) || Number.isNaN(Date.parse(enquiry.travelDate)) || new Date(enquiry.travelDate).toISOString().slice(0,10) !== enquiry.travelDate || enquiry.travelDate < new Date().toISOString().slice(0,10))) return json(res, 400, { error: 'Please enter a valid future travel date.' });
+      const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value && value >= new Date().toISOString().slice(0,10);
+      if (!['one-way','return'].includes(enquiry.tripType) || !enquiry.departureDate || !validDate(enquiry.departureDate) || (enquiry.tripType === 'return' && (!enquiry.returnDate || !validDate(enquiry.returnDate) || enquiry.returnDate <= enquiry.departureDate)) || (enquiry.tripType === 'one-way' && enquiry.returnDate)) return json(res, 400, { error: 'Please choose a valid departure date and, for return trips, a return date after departure.' });
       await appendRecord(enquiry);
       try { await sendNotification(enquiry); } catch (error) { console.error('Notification email failed:', error.message); }
       return json(res, 201, { ok: true, id: enquiry.id });
@@ -212,12 +255,23 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname.startsWith('/api/admin/')) {
     const session = requireAdmin(req, res); if (!session) return;
+    if (req.method === 'GET' && url.pathname === '/api/admin/chats') return json(res, 200, { chats: readStore(CHAT_FILE).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map(({tokenHash, ...chat}) => chat), csrf: session.csrf });
+    if (req.method === 'POST' && url.pathname.startsWith('/api/admin/chats/') && url.pathname.endsWith('/reply')) {
+      try { const id = decodeURIComponent(url.pathname.split('/')[4]); const body = await readBody(req, 3000); const message = clean(body.message, 1000); if (!message) return json(res, 400, { error: 'Enter a reply.' });
+        const chats = readStore(CHAT_FILE); const chat = chats.find(item => item.id === id); if (!chat) return json(res, 404, { error: 'Chat not found.' });
+        chat.messages.push({ id: crypto.randomUUID(), sender: 'staff', text: message, at: new Date().toISOString() }); chat.updatedAt = new Date().toISOString(); await writeStore(CHAT_FILE, chats); return json(res, 201, { ok: true });
+      } catch { return json(res, 400, { error: 'Could not send the reply.' }); }
+    }
+    if (req.method === 'GET' && url.pathname === '/api/admin/reviews') return json(res, 200, { reviews: readStore(REVIEW_FILE).sort((a,b) => b.receivedAt.localeCompare(a.receivedAt)), csrf: session.csrf });
+    if (req.method === 'PATCH' && url.pathname.startsWith('/api/admin/reviews/')) {
+      try { const id = decodeURIComponent(url.pathname.split('/').pop()); const body = await readBody(req, 2000); const rows = readStore(REVIEW_FILE); const item = rows.find(row => row.id === id); if (!item) return json(res, 404, { error: 'Review not found.' }); item.approved = body.approved === true; await writeStore(REVIEW_FILE, rows); return json(res, 200, { ok: true }); } catch { return json(res, 400, { error: 'Could not update review.' }); }
+    }
     if (req.method === 'GET' && url.pathname === '/api/admin/enquiries') {
       const records = getRecords().sort((a,b) => b.receivedAt.localeCompare(a.receivedAt));
       return json(res, 200, { enquiries: records, csrf: session.csrf });
     }
     if (req.method === 'GET' && url.pathname === '/api/admin/export.csv') {
-      const records = getRecords(); const keys = ['id','receivedAt','status','name','email','phone','service','destination','travelDate','travellers','budget','message','adminNotes'];
+      const records = getRecords(); const keys = ['id','receivedAt','status','name','email','phone','service','destination','tripType','departureDate','returnDate','travelDate','travellers','budget','message','adminNotes'];
       const output = [keys.join(','), ...records.map(row => keys.map(key => csvEscape(row[key])).join(','))].join('\r\n');
       res.writeHead(200, { 'Content-Type':'text/csv; charset=utf-8', 'Content-Disposition':'attachment; filename="jimnaya-enquiries.csv"', 'Cache-Control':'no-store' }); return res.end('\uFEFF' + output);
     }
