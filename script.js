@@ -1,51 +1,32 @@
-const menuButton = document.querySelector('.menu-toggle');
-const nav = document.querySelector('.nav');
-menuButton.addEventListener('click', () => {
-  const open = nav.classList.toggle('open');
-  menuButton.setAttribute('aria-expanded', String(open));
-  menuButton.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
-  menuButton.textContent = open ? '×' : '☰';
-});
-document.querySelectorAll('.nav a').forEach(link => link.addEventListener('click', () => {
-  nav.classList.remove('open'); menuButton.setAttribute('aria-expanded', 'false'); menuButton.textContent = '☰';
-}));
-document.getElementById('year').textContent = new Date().getFullYear();
-const dateInput = document.querySelector('[name="travelDate"]');
-if (dateInput) dateInput.min = new Date().toISOString().slice(0, 10);
-fetch('/api/public-config').then(r => r.json()).then(config => {
-  const contact = document.getElementById('footer-contact');
-  const contactPanel = document.getElementById('contact-details');
-  const items = [];
-  if (config.phone) items.push(`<a href="tel:${encodeURIComponent(config.phone)}">${escapeHtml(config.phone)}</a>`);
-  if (config.email) items.push(`<a href="mailto:${encodeURIComponent(config.email)}">${escapeHtml(config.email)}</a>`);
-  if (config.address) items.push(`<span>${escapeHtml(config.address)}</span>`);
-  if (config.hours) items.push(`<span>${escapeHtml(config.hours)}</span>`);
-  if (config.whatsapp) items.push(`<a target="_blank" rel="noopener noreferrer" href="https://wa.me/${encodeURIComponent(config.whatsapp)}">Chat on WhatsApp ↗</a>`);
-  if (contact) contact.innerHTML = items.join('');
-  if (contactPanel) contactPanel.innerHTML = items.join('');
-}).catch(() => {});
-function escapeHtml(value) { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-document.querySelectorAll('[data-service]').forEach(link => link.addEventListener('click', () => {
-  document.querySelector('[name="service"]').value = link.dataset.service;
-}));
-document.querySelectorAll('.destination-select').forEach(button => button.addEventListener('click', () => {
-  document.querySelector('[name="destination"]').value = button.dataset.destination;
-  document.querySelector('#contact').scrollIntoView({behavior:'smooth'});
-}));
-const form = document.getElementById('enquiry-form');
-const status = document.getElementById('form-status');
-form.addEventListener('submit', async event => {
-  event.preventDefault();
-  status.className = 'form-status'; status.textContent = 'Sending your enquiry…';
-  const payload = Object.fromEntries(new FormData(form).entries());
-  try {
-    const response = await fetch('/api/enquiries', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Unable to submit your enquiry.');
-    status.textContent = 'Thank you. Your enquiry has been received. Our team will review your request and get back to you.';
-    form.reset();
-  } catch (error) {
-    status.className = 'form-status error';
-    status.textContent = error.message || 'The enquiry could not be sent. Please try again.';
-  }
-});
+'use strict';
+const menuButton=document.querySelector('.menu-toggle'),nav=document.querySelector('.nav');
+menuButton.addEventListener('click',()=>{const open=nav.classList.toggle('open');menuButton.setAttribute('aria-expanded',String(open));menuButton.textContent=open?'×':'☰';});
+document.querySelectorAll('.nav a').forEach(link=>link.addEventListener('click',()=>{nav.classList.remove('open');menuButton.setAttribute('aria-expanded','false');menuButton.textContent='☰';}));
+document.getElementById('year').textContent=new Date().getFullYear();
+const form=document.getElementById('enquiry-form'),status=document.getElementById('form-status');
+const departure=form.elements.departureDate,returnDate=form.elements.returnDate,tripType=form.elements.tripType;
+const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10);};
+departure.min=today();returnDate.min=today();
+function updateTripFields(){const oneWay=tripType.value==='one-way';returnDate.required=!oneWay;returnDate.disabled=oneWay;returnDate.value=oneWay?'':returnDate.value;returnDate.min=departure.value||today();if(oneWay)returnDate.setCustomValidity('');}
+tripType.addEventListener('change',updateTripFields);departure.addEventListener('change',()=>{returnDate.min=departure.value||today();if(returnDate.value&&returnDate.value<=departure.value)returnDate.value='';});
+returnDate.addEventListener('change',()=>returnDate.setCustomValidity(returnDate.value&&returnDate.value<=departure.value?'Return date must be after departure date.':''));
+updateTripFields();
+fetch('/api/public-config').then(r=>r.json()).then(config=>{const items=[];if(config.phone)items.push(`<a href="tel:${encodeURIComponent(config.phone)}">${escapeHtml(config.phone)}</a>`);if(config.email)items.push(`<a href="mailto:${encodeURIComponent(config.email)}">${escapeHtml(config.email)}</a>`);if(config.address)items.push(`<span>${escapeHtml(config.address)}</span>`);if(config.hours)items.push(`<span>${escapeHtml(config.hours)}</span>`);if(config.whatsapp)items.push(`<a target="_blank" rel="noopener noreferrer" href="https://wa.me/${encodeURIComponent(config.whatsapp)}">Chat on WhatsApp ↗</a>`);['footer-contact','contact-details'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=items.join('');});}).catch(()=>{});
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+document.querySelectorAll('[data-service]').forEach(el=>el.addEventListener('click',()=>form.elements.service.value=el.dataset.service));
+document.querySelectorAll('.destination-select').forEach(el=>el.addEventListener('click',()=>{form.elements.destination.value=el.dataset.destination;document.querySelector('#contact').scrollIntoView({behavior:'smooth'});}));
+form.addEventListener('submit',async e=>{e.preventDefault();if(tripType.value==='return'&&returnDate.value<=departure.value){returnDate.setCustomValidity('Return date must be after departure date.');returnDate.reportValidity();return;}status.className='form-status';status.textContent='Sending your enquiry…';const payload=Object.fromEntries(new FormData(form).entries());try{const r=await fetch('/api/enquiries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await r.json();if(!r.ok)throw new Error(data.error||'Unable to submit your enquiry.');status.textContent='Thank you. Your enquiry has been received. Our team will get back to you.';form.reset();updateTripFields();}catch(err){status.className='form-status error';status.textContent=err.message;}});
+const reviewList=document.getElementById('approved-reviews'),reviewForm=document.getElementById('review-form'),reviewStatus=document.getElementById('review-status');
+async function loadReviews(){try{const r=await fetch('/api/reviews');const d=await r.json();reviewList.innerHTML=d.reviews.length?d.reviews.map(x=>`<article class="review-card"><div class="review-stars" aria-label="${x.rating} out of 5 stars">${'★'.repeat(x.rating)}<span>${'☆'.repeat(5-x.rating)}</span></div><p>“${escapeHtml(x.text)}”</p><strong>${escapeHtml(x.name)}</strong></article>`).join(''):'<p>No published reviews yet. You can be the first to share your experience.</p>';}catch{reviewList.textContent='Reviews are temporarily unavailable.';}}
+loadReviews();
+reviewForm.addEventListener('submit',async e=>{e.preventDefault();reviewStatus.textContent='Submitting…';try{const r=await fetch('/api/reviews',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(reviewForm).entries()))});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not submit review.');reviewStatus.textContent=d.message;reviewForm.reset();}catch(err){reviewStatus.textContent=err.message;}});
+const toggle=document.getElementById('chat-toggle'),panel=document.getElementById('chat-panel'),close=document.getElementById('chat-close'),messages=document.getElementById('chat-messages'),startForm=document.getElementById('chat-start-form'),replyForm=document.getElementById('chat-reply-form'),chatStatus=document.getElementById('chat-status');
+let chatSession=null,pollHandle=null;
+try{chatSession=JSON.parse(sessionStorage.getItem('jimnayaChat')||'null');}catch{}
+function showChat(open){panel.hidden=!open;toggle.setAttribute('aria-expanded',String(open));if(open&&chatSession){startForm.hidden=true;replyForm.hidden=false;loadChat();}if(!open&&pollHandle){clearInterval(pollHandle);pollHandle=null;}if(open&&chatSession&&!pollHandle)pollHandle=setInterval(loadChat,5000);}
+toggle.addEventListener('click',()=>showChat(panel.hidden));close.addEventListener('click',()=>showChat(false));
+function renderMessages(rows){messages.innerHTML=rows.map(m=>`<div class="chat-message ${m.sender==='visitor'?'visitor':'staff'}"><p>${escapeHtml(m.text)}</p><small>${m.sender==='staff'?'Jimnaya':'You'} · ${new Date(m.at).toLocaleString()}</small></div>`).join('');messages.scrollTop=messages.scrollHeight;}
+async function loadChat(){if(!chatSession)return;try{const r=await fetch('/api/chat/'+encodeURIComponent(chatSession.id)+'?token='+encodeURIComponent(chatSession.token));const d=await r.json();if(!r.ok)throw new Error(d.error);renderMessages(d.messages);chatStatus.textContent=d.status==='open'?'Our team will reply here. Keep this window open or return on this device.':'';}catch(err){chatStatus.textContent='Chat connection interrupted. Please try again later.';}}
+startForm.addEventListener('submit',async e=>{e.preventDefault();chatStatus.textContent='Starting chat…';try{const r=await fetch('/api/chat/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(startForm).entries()))});const d=await r.json();if(!r.ok)throw new Error(d.error);chatSession={id:d.id,token:d.token};sessionStorage.setItem('jimnayaChat',JSON.stringify(chatSession));startForm.hidden=true;replyForm.hidden=false;renderMessages(d.messages);chatStatus.textContent='Your message has been sent. Our team can reply while you are online.';showChat(true);}catch(err){chatStatus.textContent=err.message;}});
+replyForm.addEventListener('submit',async e=>{e.preventDefault();const input=replyForm.elements.message;const message=input.value.trim();if(!message)return;try{const r=await fetch('/api/chat/'+encodeURIComponent(chatSession.id)+'?token='+encodeURIComponent(chatSession.token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});const d=await r.json();if(!r.ok)throw new Error(d.error);input.value='';await loadChat();}catch(err){chatStatus.textContent=err.message;}});
+if(chatSession){startForm.hidden=true;replyForm.hidden=false;}
