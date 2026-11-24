@@ -195,7 +195,7 @@ const server = http.createServer(async (req, res) => {
     const limit = rateLimit(`review:${ip}`, 3, 60 * 60 * 1000);
     if (!limit.allowed) return json(res, 429, { error: 'Please wait before submitting another review.' });
     try { const body = await readBody(req, 5000); const review = { id: crypto.randomUUID(), name: clean(body.name, 80), rating: Number(body.rating), text: clean(body.text, 700), receivedAt: new Date().toISOString(), approved: false };
-      if (!review.name || !Number.isInteger(review.rating) || review.rating < 1 || review.rating > 5 || review.text.length < 15) return json(res, 400, { error: 'Please provide your name, a rating and a review of at least 15 characters.' });
+      if (body.consent !== 'yes' || !review.name || !Number.isInteger(review.rating) || review.rating < 1 || review.rating > 5 || review.text.length < 15) return json(res, 400, { error: 'Please provide your name, a rating and a review of at least 15 characters.' });
       const rows = readStore(REVIEW_FILE); rows.push(review); await writeStore(REVIEW_FILE, rows); return json(res, 201, { ok: true, message: 'Thank you. Your review has been sent for approval.' });
     } catch { return json(res, 400, { error: 'We could not submit your review. Please try again.' }); }
   }
