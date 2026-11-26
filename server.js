@@ -21,7 +21,8 @@ const BUSINESS = {
   phone: process.env.BUSINESS_PHONE || '+254184763724',
   email: process.env.BUSINESS_EMAIL || 'info@jimnayaglobaltours.com',
   whatsapp: (process.env.WHATSAPP_NUMBER || '254184763722').replace(/\D/g, ''),
-  address: process.env.BUSINESS_ADDRESS || '',
+  address: process.env.BUSINESS_ADDRESS || 'Second Floor, Room 209',
+  mapUrl: process.env.BUSINESS_MAP_URL || 'https://maps.app.goo.gl/2WQUNdGHj8EToCiG8',
   hours: process.env.BUSINESS_HOURS || ''
 };
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -162,7 +163,7 @@ async function sendNotification(enquiry) {
   return true;
 }
 function csvEscape(value) { const s = String(value ?? ''); return `"${s.replace(/"/g, '""')}"`; }
-function publicConfig() { return { phone: BUSINESS.phone, email: BUSINESS.email, whatsapp: BUSINESS.whatsapp, address: BUSINESS.address, hours: BUSINESS.hours }; }
+function publicConfig() { return { phone: BUSINESS.phone, email: BUSINESS.email, whatsapp: BUSINESS.whatsapp, address: BUSINESS.address, mapUrl: BUSINESS.mapUrl, hours: BUSINESS.hours }; }
 const mime = { '.html':'text/html; charset=utf-8', '.css':'text/css; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.svg':'image/svg+xml', '.webp':'image/webp', '.ico':'image/x-icon', '.xml':'application/xml; charset=utf-8', '.txt':'text/plain; charset=utf-8' };
 
 const server = http.createServer(async (req, res) => {
