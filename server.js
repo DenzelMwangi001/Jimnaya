@@ -305,7 +305,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/privacy') pathname = '/privacy.html';
   if (pathname === '/terms') pathname = '/terms.html';
   const publicFiles = new Set(['/index.html','/styles.css','/script.js','/admin.html','/admin.css','/admin.js','/privacy.html','/terms.html','/robots.txt']);
-  const isAsset = pathname.startsWith('/assets/') && !pathname.slice('/assets/'.length).includes('/') && !pathname.includes('..');
+  const isAsset = (pathname.startsWith('/assets/') || pathname.startsWith('/photos/')) && !pathname.slice(pathname.startsWith('/assets/') ? '/assets/'.length : '/photos/'.length).includes('/') && !pathname.includes('..');
   if (pathname.split('/').some(part => part.startsWith('.')) || pathname.includes('..') || (!publicFiles.has(pathname) && !isAsset)) return text(res, 404, 'Not found');
   const file = path.resolve(ROOT, '.' + pathname);
   if (!file.startsWith(ROOT + path.sep)) return text(res, 403, 'Forbidden');
