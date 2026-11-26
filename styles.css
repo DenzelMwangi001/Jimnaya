@@ -11,3 +11,20 @@
 /* Customer reviews and chat */
 .review-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.review-card{border:1px solid var(--line);padding:25px;background:#fff}.review-card p{font:16px/1.7 var(--serif);color:var(--navy)}.review-card strong{font-size:11px}.review-stars{color:#a88c5b;letter-spacing:2px}.review-stars span{color:#d8d5cc}.review-form{max-width:760px;margin:38px auto 0;padding:30px;background:var(--cream)}.review-form h3{font:24px var(--serif);color:var(--navy);margin-top:0}.review-form label,.chat-panel label{display:block;font-size:11px;font-weight:700;margin-bottom:15px}.review-form input,.review-form select,.review-form textarea,.chat-panel input,.chat-panel textarea{display:block;width:100%;margin-top:7px;padding:12px;border:1px solid var(--line);font:13px var(--sans);background:#fff}.chat-widget{position:fixed;right:24px;bottom:22px;z-index:50}.chat-toggle{border:0;background:var(--navy);color:white;padding:16px 20px;font:700 12px var(--sans);box-shadow:0 8px 28px #101a3230;cursor:pointer}.chat-toggle span{color:var(--gold);margin-left:14px}.chat-panel{width:min(360px,calc(100vw - 32px));height:min(560px,calc(100vh - 110px));background:white;box-shadow:0 12px 45px #101a3230;border:1px solid var(--line);display:flex;flex-direction:column}.chat-panel[hidden]{display:none}.chat-panel header{padding:17px;background:var(--navy);color:white;display:flex;justify-content:space-between;align-items:center}.chat-panel header button{background:none;border:0;color:white;font-size:24px;cursor:pointer}.chat-messages{padding:14px;overflow:auto;flex:1;background:#f8f7f3}.chat-message{max-width:90%;padding:10px 12px;margin:9px 0;background:white;border:1px solid var(--line);font-size:12px}.chat-message.visitor{margin-left:auto;background:#edf3f7}.chat-message p{margin:0 0 5px;white-space:pre-wrap;overflow-wrap:anywhere}.chat-message small{font-size:9px;color:#777}.chat-panel form{padding:13px}.chat-panel form label{margin-bottom:8px}.chat-panel textarea{min-height:55px;resize:vertical}.chat-panel .button{padding:11px 15px}.chat-panel #chat-status{padding:0 13px;font-size:10px;color:#666}.chat-panel form[hidden]{display:none}
 @media(max-width:650px){.review-grid{grid-template-columns:1fr}.review-form{padding:22px 17px}.chat-widget{right:12px;bottom:12px}}
+
+/* Jimnaya team section */
+.team{background:var(--cream)}
+.team-heading{margin-bottom:42px}
+.team-leadership{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;max-width:820px;margin:0 auto 22px}
+.team-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.team-card{min-width:0;background:#fff;border:1px solid #e9e5dc;box-shadow:0 12px 32px #101a3208;transition:transform .25s,box-shadow .25s}
+.team-card:hover{transform:translateY(-5px);box-shadow:0 18px 38px #101a3214}
+.team-portrait{height:245px;overflow:hidden;background:#e8e5df}
+.team-card-lead .team-portrait{height:340px}
+.team-portrait img{display:block;width:100%;height:100%;object-fit:cover;object-position:center 28%;transition:transform .5s}
+.team-card:hover .team-portrait img{transform:scale(1.035)}
+.team-person{padding:19px 20px 21px;border-top:2px solid var(--gold)}
+.team-role{display:block;color:#987a48;font-size:9px;font-weight:700;letter-spacing:1.45px;line-height:1.6}
+.team-person h3{margin:8px 0 0;color:var(--navy);font:600 21px/1.25 var(--serif)}
+@media(max-width:900px){.team-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.team-portrait{height:280px}}
+@media(max-width:560px){.team{padding-left:6%;padding-right:6%}.team-leadership{gap:12px}.team-card-lead .team-portrait{height:210px}.team-grid{gap:12px}.team-portrait{height:205px}.team-person{padding:14px 12px 16px}.team-person h3{font-size:17px}.team-role{font-size:8px;letter-spacing:1px}.team-heading{display:block}.team-heading>p{margin-top:18px}}
