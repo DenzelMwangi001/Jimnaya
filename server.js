@@ -162,7 +162,7 @@ async function sendNotification(enquiry) {
   ];
   const safe = value => escapeEmailHtml(value);
   const rows = fields.map(([label, value]) => `<tr><td style="padding:11px 0;border-bottom:1px solid #ece9e2;color:#777b87;font-size:11px;letter-spacing:1px;font-weight:bold;width:38%;vertical-align:top;">${safe(label)}</td><td style="padding:11px 0;border-bottom:1px solid #ece9e2;color:#20243a;font-size:14px;line-height:1.5;">${safe(value)}</td></tr>`).join('');
-  const safeMessage = safe(enquiry.message).replace(/\\r?\\n/g, '<br>');
+  const safeMessage = safe(enquiry.message).replace(/\r?\n/g, '<br>');
   const received = safe(new Date(enquiry.receivedAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }));
   const html = `<!doctype html>
 <html lang="en"><body style="margin:0;padding:32px 12px;background:#f6f4ef;font-family:Arial,Helvetica,sans-serif;color:#20243a;">
@@ -188,7 +188,7 @@ async function sendNotification(enquiry) {
     ...fields.map(([label, value]) => `${label}: ${value}`), '',
     'CUSTOMER MESSAGE:', enquiry.message, '',
     `Received: ${received}`
-  ].join('\\n');
+  ].join('\n');
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: FROM_EMAIL, to: [NOTIFICATION_EMAIL], reply_to: enquiry.email, subject, html, text: plainText }),
