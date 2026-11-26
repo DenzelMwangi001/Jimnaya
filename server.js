@@ -237,8 +237,9 @@ const server = http.createServer(async (req, res) => {
       const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value && value >= new Date().toISOString().slice(0,10);
       if (!['one-way','return'].includes(enquiry.tripType) || !enquiry.departureDate || !validDate(enquiry.departureDate) || (enquiry.tripType === 'return' && (!enquiry.returnDate || !validDate(enquiry.returnDate) || enquiry.returnDate <= enquiry.departureDate)) || (enquiry.tripType === 'one-way' && enquiry.returnDate)) return json(res, 400, { error: 'Please choose a valid departure date and, for return trips, a return date after departure.' });
       await appendRecord(enquiry);
-      try { await sendNotification(enquiry); } catch (error) { console.error('Notification email failed:', error.message); }
-      return json(res, 201, { ok: true, id: enquiry.id });
+      let emailSent = false;
+      try { emailSent = await sendNotification(enquiry); } catch (error) { console.error('Notification email failed:', error.message); }
+      return json(res, 201, { ok: true, id: enquiry.id, emailSent });
     } catch (error) { if (!res.headersSent) return json(res, error.message === 'Request too large' ? 413 : 400, { error: error.message === 'Request too large' ? 'Enquiry is too large.' : 'Please check the submitted information and try again.' }); }
   }
 
