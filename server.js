@@ -162,19 +162,48 @@ async function sendNotification(enquiry) {
   if (!response.ok) throw new Error(`Email provider returned ${response.status}`);
   return true;
 }
+function escapeEmailHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+}
 async function sendReviewNotification(review) {
   if (!RESEND_API_KEY || !NOTIFICATION_EMAIL || !FROM_EMAIL) return false;
   const subject = `New Jimnaya customer review (${review.rating}/5 stars)`;
-  const lines = [
-    `A new customer review has been submitted and is awaiting approval (${review.id}).`, '',
-    `Name: ${review.name}`, `Rating: ${review.rating}/5 stars`, '',
-    'Review:', review.text, '',
-    `Received: ${review.receivedAt}`, '',
-    'This review is not public until approved in the admin dashboard.'
-  ];
+  const safeName = escapeEmailHtml(review.name);
+  const safeText = escapeEmailHtml(review.text).replace(/\r?\n/g, '<br>');
+  const stars = '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
+  const received = escapeEmailHtml(new Date(review.receivedAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }));
+  const html = `<!doctype html>
+<html lang="en"><body style="margin:0;padding:32px 12px;background:#f6f4ef;font-family:Arial,Helvetica,sans-serif;color:#20243a;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #e4e1d9;">
+<tr><td style="padding:28px 34px;background:#101a32;color:#ffffff;">
+<p style="margin:0 0 8px;color:#d8bd8a;font-size:11px;letter-spacing:2px;font-weight:bold;">JIMNAYA · TRUSTED GLOBAL AGENCY</p>
+<h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:27px;font-weight:normal;">A new customer review</h1>
+</td></tr>
+<tr><td style="padding:32px 34px;">
+<p style="margin:0 0 8px;color:#727584;font-size:13px;">A new review has been submitted and is awaiting your approval.</p>
+<p style="margin:18px 0 6px;font-size:12px;color:#727584;">CUSTOMER</p>
+<p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#171f4c;">${safeName}</p>
+<p style="margin:20px 0 6px;font-size:12px;color:#727584;">RATING</p>
+<p style="margin:0;color:#a88c5b;font-size:22px;letter-spacing:3px;">${stars}</p>
+<div style="margin:24px 0;padding:22px;background:#f6f4ef;border-left:3px solid #c6a66a;">
+<p style="margin:0 0 10px;color:#727584;font-size:11px;font-weight:bold;letter-spacing:1px;">CUSTOMER FEEDBACK</p>
+<p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.7;color:#20243a;">${safeText}</p>
+</div>
+<p style="margin:0;color:#727584;font-size:12px;">Received: ${received}</p>
+<p style="margin:24px 0 0;padding-top:18px;border-top:1px solid #e4e1d9;color:#727584;font-size:12px;line-height:1.6;">This review will not appear publicly until it has been approved in the Jimnaya admin dashboard.</p>
+</td></tr>
+<tr><td style="padding:18px 34px;background:#101a32;color:#c6cad5;font-size:11px;">Thoughtful journeys. Seamless travel.</td></tr>
+</table></body></html>`;
+  const plainText = [
+    'A new customer review has been submitted and is awaiting your approval.', '',
+    `Customer: ${review.name}`, `Rating: ${review.rating}/5 stars`, '',
+    'Customer feedback:', review.text, '',
+    `Received: ${received}`, '',
+    'This review will not appear publicly until approved in the Jimnaya admin dashboard.'
+  ].join('\\n');
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM_EMAIL, to: [NOTIFICATION_EMAIL], subject, text: lines.join('\\n') }),
+    body: JSON.stringify({ from: FROM_EMAIL, to: [NOTIFICATION_EMAIL], subject, html, text: plainText }),
     signal: AbortSignal.timeout(8000)
   });
   if (!response.ok) throw new Error(`Email provider returned ${response.status}`);
