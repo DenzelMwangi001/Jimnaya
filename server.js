@@ -18,9 +18,9 @@ const REVIEW_FILE = path.join(DATA_DIR, 'reviews.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString('hex');
 const BUSINESS = {
-  phone: process.env.BUSINESS_PHONE || '',
+  phone: process.env.BUSINESS_PHONE || '+254184763724',
   email: process.env.BUSINESS_EMAIL || 'info@jimnayaglobaltours.com',
-  whatsapp: (process.env.WHATSAPP_NUMBER || '').replace(/\D/g, ''),
+  whatsapp: (process.env.WHATSAPP_NUMBER || '254184763722').replace(/\D/g, ''),
   address: process.env.BUSINESS_ADDRESS || '',
   hours: process.env.BUSINESS_HOURS || ''
 };
