@@ -19,7 +19,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString('hex');
 const BUSINESS = {
   phone: process.env.BUSINESS_PHONE || '',
-  email: process.env.BUSINESS_EMAIL || '',
+  email: process.env.BUSINESS_EMAIL || 'info@jimnayaglobaltours.com',
   whatsapp: (process.env.WHATSAPP_NUMBER || '').replace(/\D/g, ''),
   address: process.env.BUSINESS_ADDRESS || '',
   hours: process.env.BUSINESS_HOURS || ''
