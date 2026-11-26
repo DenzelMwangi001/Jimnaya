@@ -21,7 +21,7 @@ const BUSINESS = {
   phone: process.env.BUSINESS_PHONE || '+254184763724',
   email: process.env.BUSINESS_EMAIL || 'info@jimnayaglobaltours.com',
   whatsapp: (process.env.WHATSAPP_NUMBER || '254184763722').replace(/\D/g, ''),
-  address: process.env.BUSINESS_ADDRESS || 'Second Floor, Room 209',
+  address: process.env.BUSINESS_ADDRESS || 'Portal Place, Second Floor, Office Suite 209',
   mapUrl: process.env.BUSINESS_MAP_URL || 'https://maps.app.goo.gl/2WQUNdGHj8EToCiG8',
   hours: process.env.BUSINESS_HOURS || ''
 };
