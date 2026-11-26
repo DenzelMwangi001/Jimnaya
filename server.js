@@ -162,6 +162,24 @@ async function sendNotification(enquiry) {
   if (!response.ok) throw new Error(`Email provider returned ${response.status}`);
   return true;
 }
+async function sendReviewNotification(review) {
+  if (!RESEND_API_KEY || !NOTIFICATION_EMAIL || !FROM_EMAIL) return false;
+  const subject = `New Jimnaya customer review (${review.rating}/5 stars)`;
+  const lines = [
+    `A new customer review has been submitted and is awaiting approval (${review.id}).`, '',
+    `Name: ${review.name}`, `Rating: ${review.rating}/5 stars`, '',
+    'Review:', review.text, '',
+    `Received: ${review.receivedAt}`, '',
+    'This review is not public until approved in the admin dashboard.'
+  ];
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST', headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: FROM_EMAIL, to: [NOTIFICATION_EMAIL], subject, text: lines.join('\\n') }),
+    signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error(`Email provider returned ${response.status}`);
+  return true;
+}
 function csvEscape(value) { const s = String(value ?? ''); return `"${s.replace(/"/g, '""')}"`; }
 function publicConfig() { return { phone: BUSINESS.phone, email: BUSINESS.email, whatsapp: BUSINESS.whatsapp, address: BUSINESS.address, mapUrl: BUSINESS.mapUrl, hours: BUSINESS.hours }; }
 const mime = { '.html':'text/html; charset=utf-8', '.css':'text/css; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.svg':'image/svg+xml', '.webp':'image/webp', '.ico':'image/x-icon', '.xml':'application/xml; charset=utf-8', '.txt':'text/plain; charset=utf-8' };
@@ -197,7 +215,10 @@ const server = http.createServer(async (req, res) => {
     if (!limit.allowed) return json(res, 429, { error: 'Please wait before submitting another review.' });
     try { const body = await readBody(req, 5000); const review = { id: crypto.randomUUID(), name: clean(body.name, 80), rating: Number(body.rating), text: clean(body.text, 700), receivedAt: new Date().toISOString(), approved: false };
       if (body.consent !== 'yes' || !review.name || !Number.isInteger(review.rating) || review.rating < 1 || review.rating > 5 || review.text.length < 15) return json(res, 400, { error: 'Please provide your name, a rating and a review of at least 15 characters.' });
-      const rows = readStore(REVIEW_FILE); rows.push(review); await writeStore(REVIEW_FILE, rows); return json(res, 201, { ok: true, message: 'Thank you. Your review has been sent for approval.' });
+      const rows = readStore(REVIEW_FILE); rows.push(review); await writeStore(REVIEW_FILE, rows);
+      let emailSent = false;
+      try { emailSent = await sendReviewNotification(review); } catch (error) { console.error('Review notification email failed:', error.message); }
+      return json(res, 201, { ok: true, emailSent, message: emailSent ? 'Thank you. Your review has been submitted for approval, and Jimnaya has been notified.' : 'Your review has been recorded for approval, but the email notification could not be sent. Please contact Jimnaya directly if needed.' });
     } catch { return json(res, 400, { error: 'We could not submit your review. Please try again.' }); }
   }
   if (req.method === 'POST' && url.pathname === '/api/chat/start') {
@@ -321,6 +342,6 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Jimnaya is running on port ${PORT} (${NODE_ENV}).`);
   if (!ADMIN_PASSWORD) console.warn('Admin dashboard disabled until ADMIN_PASSWORD is configured.');
-  if (!RESEND_API_KEY || !NOTIFICATION_EMAIL || !FROM_EMAIL) console.warn('Email alerts are not configured. Enquiries will still be saved.');
+  if (!RESEND_API_KEY || !NOTIFICATION_EMAIL || !FROM_EMAIL) console.warn('Email alerts are not configured. Enquiries and reviews will still be saved, but email notifications will not be sent.');
   if (!BUSINESS.phone && !BUSINESS.email && !BUSINESS.whatsapp) console.warn('Business contact details are not configured; add verified details to .env.');
 });
