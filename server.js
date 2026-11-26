@@ -147,16 +147,51 @@ function safeEqual(a, b) {
 async function sendNotification(enquiry) {
   if (!RESEND_API_KEY || !NOTIFICATION_EMAIL || !FROM_EMAIL) return false;
   const subject = `New Jimnaya enquiry: ${enquiry.service}`;
-  const lines = [
-    `New travel enquiry received (${enquiry.id})`, '',
-    `Name: ${enquiry.name}`, `Email: ${enquiry.email}`, `Phone: ${enquiry.phone || 'Not provided'}`,
-    `Service: ${enquiry.service}`, `Destination: ${enquiry.destination || 'Not specified'}`,
-    `Departure date: ${enquiry.departureDate || 'Not specified'}`, `Return date: ${enquiry.returnDate || (enquiry.tripType === 'one-way' ? 'One-way trip' : 'Not specified')}`, '', `Message:`, enquiry.message,
-    '', `Received: ${enquiry.receivedAt}`
+  const fields = [
+    ['CUSTOMER', enquiry.name],
+    ['EMAIL ADDRESS', enquiry.email],
+    ['PHONE NUMBER', enquiry.phone || 'Not provided'],
+    ['SERVICE', enquiry.service],
+    ['FLYING FROM', enquiry.origin || 'Not specified'],
+    ['DESTINATION', enquiry.destination || 'Not specified'],
+    ['TRIP TYPE', enquiry.tripType === 'one-way' ? 'One-way' : 'Return'],
+    ['DEPARTURE DATE', enquiry.departureDate || 'Not specified'],
+    ['RETURN DATE', enquiry.returnDate || (enquiry.tripType === 'one-way' ? 'One-way trip' : 'Not specified')],
+    ['TRAVELLERS', enquiry.travellers || 'Not specified'],
+    ['APPROXIMATE BUDGET', enquiry.budget || 'Not specified']
   ];
+  const safe = value => escapeEmailHtml(value);
+  const rows = fields.map(([label, value]) => `<tr><td style="padding:11px 0;border-bottom:1px solid #ece9e2;color:#777b87;font-size:11px;letter-spacing:1px;font-weight:bold;width:38%;vertical-align:top;">${safe(label)}</td><td style="padding:11px 0;border-bottom:1px solid #ece9e2;color:#20243a;font-size:14px;line-height:1.5;">${safe(value)}</td></tr>`).join('');
+  const safeMessage = safe(enquiry.message).replace(/\\r?\\n/g, '<br>');
+  const received = safe(new Date(enquiry.receivedAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' }));
+  const html = `<!doctype html>
+<html lang="en"><body style="margin:0;padding:32px 12px;background:#f6f4ef;font-family:Arial,Helvetica,sans-serif;color:#20243a;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #e4e1d9;">
+<tr><td style="padding:28px 34px;background:#101a32;color:#ffffff;">
+<p style="margin:0 0 8px;color:#d8bd8a;font-size:11px;letter-spacing:2px;font-weight:bold;">JIMNAYA · TRUSTED GLOBAL AGENCY</p>
+<h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:27px;font-weight:normal;">A new travel enquiry</h1>
+</td></tr>
+<tr><td style="padding:30px 34px;">
+<p style="margin:0 0 20px;color:#727584;font-size:13px;line-height:1.6;">A customer has submitted a travel enquiry through the Jimnaya website. The details are below.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${rows}</table>
+<div style="margin:24px 0 0;padding:22px;background:#f6f4ef;border-left:3px solid #c6a66a;">
+<p style="margin:0 0 10px;color:#727584;font-size:11px;font-weight:bold;letter-spacing:1px;">CUSTOMER'S MESSAGE</p>
+<p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.7;color:#20243a;">${safeMessage}</p>
+</div>
+<p style="margin:22px 0 0;color:#727584;font-size:12px;">Received: ${received}</p>
+<p style="margin:24px 0 0;padding-top:18px;border-top:1px solid #e4e1d9;color:#727584;font-size:12px;line-height:1.6;">Reply directly to this email to respond to the customer. Their email address is set as the reply-to address.</p>
+</td></tr>
+<tr><td style="padding:18px 34px;background:#101a32;color:#c6cad5;font-size:11px;">Thoughtful journeys. Seamless travel.</td></tr>
+</table></body></html>`;
+  const plainText = [
+    `New travel enquiry received (${enquiry.id})`, '',
+    ...fields.map(([label, value]) => `${label}: ${value}`), '',
+    'CUSTOMER MESSAGE:', enquiry.message, '',
+    `Received: ${received}`
+  ].join('\\n');
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM_EMAIL, to: [NOTIFICATION_EMAIL], reply_to: enquiry.email, subject, text: lines.join('\n') }),
+    body: JSON.stringify({ from: FROM_EMAIL, to: [NOTIFICATION_EMAIL], reply_to: enquiry.email, subject, html, text: plainText }),
     signal: AbortSignal.timeout(8000)
   });
   if (!response.ok) throw new Error(`Email provider returned ${response.status}`);
@@ -280,7 +315,7 @@ const server = http.createServer(async (req, res) => {
         id: crypto.randomUUID(), receivedAt: new Date().toISOString(),
         name: clean(body.name, 100), email: clean(body.email, 254).toLowerCase(),
         phone: clean(body.phone, 40), service: clean(body.service, 80),
-        destination: clean(body.destination, 160), tripType: clean(body.tripType, 20), departureDate: clean(body.departureDate || body.travelDate, 20), returnDate: clean(body.returnDate, 20), travelDate: clean(body.departureDate || body.travelDate, 20),
+        origin: clean(body.origin, 160), destination: clean(body.destination, 160), tripType: clean(body.tripType, 20), departureDate: clean(body.departureDate || body.travelDate, 20), returnDate: clean(body.returnDate, 20), travelDate: clean(body.departureDate || body.travelDate, 20),
         travellers: clean(body.travellers, 30), budget: clean(body.budget, 60),
         message: clean(body.message, 3000), status: 'new', adminNotes: ''
       };
@@ -323,7 +358,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { enquiries: records, csrf: session.csrf });
     }
     if (req.method === 'GET' && url.pathname === '/api/admin/export.csv') {
-      const records = getRecords(); const keys = ['id','receivedAt','status','name','email','phone','service','destination','tripType','departureDate','returnDate','travelDate','travellers','budget','message','adminNotes'];
+      const records = getRecords(); const keys = ['id','receivedAt','status','name','email','phone','service','origin','destination','tripType','departureDate','returnDate','travelDate','travellers','budget','message','adminNotes'];
       const output = [keys.join(','), ...records.map(row => keys.map(key => csvEscape(row[key])).join(','))].join('\r\n');
       res.writeHead(200, { 'Content-Type':'text/csv; charset=utf-8', 'Content-Disposition':'attachment; filename="jimnaya-enquiries.csv"', 'Cache-Control':'no-store' }); return res.end('\uFEFF' + output);
     }
